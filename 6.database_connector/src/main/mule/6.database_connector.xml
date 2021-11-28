@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	<flow name="get_all_customers" doc:id="477e64ab-ef9a-415b-8bfd-57582b69669d" >
+		<http:listener doc:name="HTTP GET" doc:id="2ccc1365-e60b-4a52-907d-69c169c5957c" allowedMethods="GET" config-ref="HTTP_Listener_config" path="/customers"/>
+		<db:select doc:name="Select" doc:id="f1ac45cd-7e4a-42db-bbd1-4c9ee536fddf" config-ref="Database_Config">
+			<db:sql ><![CDATA[select * 
+from customers;]]></db:sql>
+		</db:select>
+		<logger level="INFO" doc:name="Logger" doc:id="d0db95f4-7c1e-4558-bf6f-dee892e33085" message="#[%dw 2.0&#10;&#10;output application/json&#10;---&#10;&#10;payload]"/>
+		<set-payload value='#[%dw 2.0&#10;&#10;output application/json&#10;---&#10;&#10;{&#10;	"customers" : payload&#10;}]' doc:name="Set Payload" doc:id="e615ee80-618e-4639-ac7a-e3ec35d1b868" />
+	</flow>
+	<flow name="get_customer_by_id" doc:id="7c39c8b2-17d8-42db-811d-74ca73c2e3da" >
+		<http:listener doc:name="HTTP GET" doc:id="4dafb342-8688-4993-9f68-23e0a9a2cec4" config-ref="HTTP_Listener_config" path="/customers/{customerID}" allowedMethods="GET"/>
+		<db:select doc:name="get customer by id" doc:id="9fa2888f-abc8-476f-b262-47db00d9720b" config-ref="Database_Config">
+			<db:sql ><![CDATA[select *
+from customers
+where id = :clientID]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	'clientID': attributes.uriParams.customerID
+}]]]></db:input-parameters>
+		</db:select>
+		<logger level="INFO" doc:name="Logger" doc:id="646fb984-032b-450f-8eb0-d965e66da244" message="#[%dw 2.0&#10;&#10;output application/json&#10;---&#10;&#10;payload]"/>
+		<choice doc:name="check if exist customer with that id" doc:id="fcad15ac-0f3d-445a-a4eb-c7fe53c5db06" >
+			<when expression="#[!isEmpty(payload)]">
+				<set-payload value='#[%dw 2.0&#10;&#10;output application/json&#10;---&#10;&#10;{&#10;	"customers" : payload&#10;&#10;}]' doc:name="set payload with customer data" doc:id="680eef7d-1f99-433c-8c35-2215f15f1a8f" />
+			</when>
+			<otherwise >
+				<set-payload value='"no customer with that id"' doc:name="set payload with default answer" doc:id="41ab8f3b-3577-49eb-a511-d4a4ab47a4ad" />
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="insert_new_customer" doc:id="df8782c8-1d37-4ed3-9050-727b75baae2c" >
+		<http:listener doc:name="HTTP POST" doc:id="2cd09bd7-e016-4fa3-9f0f-eb8534f06abd" config-ref="HTTP_Listener_config" path="/customers" allowedMethods="POST"/>
+		<db:insert doc:name="Insert" doc:id="c1b5c2e8-2379-4f90-b2c6-0df6533630cb" config-ref="Database_Config">
+			<db:sql ><![CDATA[INSERT INTO customers (customerName) VALUES (:clientName)]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	"clientName": payload.customer.customerName
+}]]]></db:input-parameters>
+			<db:auto-generated-keys-column-indexes />
+		</db:insert>
+		<logger level="INFO" doc:name="Logger" doc:id="f3849935-c9d7-44b1-8862-31d3c4d2613d" message="#[%dw 2.0&#10;&#10;output application/json&#10;---&#10;&#10;payload]"/>
+		<choice doc:name="validate the insert" doc:id="e3fed832-5f2e-4765-9510-d6c1eca5a017" >
+			<when expression="#[payload.affectedRows &gt; 0]">
+				<set-payload value='#[%dw 2.0&#10;&#10;output application/json&#10;---&#10;&#10;{&#10;	"SUCCESS": payload&#10;}]' doc:name="set payload with success message" doc:id="fe458b8e-6d8f-4f6c-b779-0f502d656266" />
+			</when>
+			<otherwise >
+				<set-payload value='#[%dw 2.0&#10;&#10;output application/json&#10;---&#10;&#10;{&#10;	"UNSUCCESFUL": payload&#10;}]' doc:name="set payload with unsuccessful message" doc:id="366a3a30-904c-4d7e-975b-33a20048385c" />
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="update_existing_customer_by_id" doc:id="0acf553b-91e3-42bb-92d2-28a37ce67340" >
+		<http:listener doc:name="HTTP PUT" doc:id="f30c35a2-36c2-467f-b4bb-566bec58ffad" config-ref="HTTP_Listener_config" path="/customers/{customerID}" allowedMethods="PUT"/>
+		<db:update doc:name="Update" doc:id="daefec75-9ac5-4a5d-adcd-5851b59e9707" config-ref="Database_Config">
+			<db:sql ><![CDATA[UPDATE customers SET customerName = :newClientName where id = :clientID]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	'newClientName': payload.customer.customerName,
+	'clientID': attributes.uriParams.customerID
+}]]]></db:input-parameters>
+		</db:update>
+		<logger level="INFO" doc:name="Logger" doc:id="44772534-2563-4960-a6a4-d0e434e59de4" message="#[%dw 2.0&#10;&#10;output application/json&#10;---&#10;&#10;payload]"/>
+		<choice doc:name="validate the update" doc:id="676c4819-7743-488c-b31b-a9e2fb76f902" >
+			<when expression="#[payload.affectedRows &gt; 0]">
+				<set-payload value='#[%dw 2.0&#10;&#10;output application/json&#10;---&#10;&#10;{&#10;	"SUCCESS": payload&#10;}]' doc:name="set payload with success message" doc:id="75d0f059-1a0f-44b3-832e-74abb03f5a5e" />
+			</when>
+			<otherwise >
+				<set-payload value='#[%dw 2.0&#10;&#10;output application/json&#10;---&#10;&#10;{&#10;	"UNSUCCESFUL": payload&#10;}]' doc:name="set payload with unsuccessful message" doc:id="dc7415d9-9b69-4071-bac9-dc7cd9e89e9d" />
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="delete_existing_customer_by_id" doc:id="8191c48f-f580-4e39-a1bf-eaeea8860398" >
+		<http:listener doc:name="HTTP DELETE" doc:id="90fde1f4-dee1-402b-9fc5-2bf5cd3845fc" config-ref="HTTP_Listener_config" path="/customers/{customerID}" allowedMethods="DELETE"/>
+		<db:delete doc:name="Delete Existing Customer" doc:id="71cd94c9-d9c5-40ec-b9cb-eaeec6ef1993" config-ref="Database_Config">
+			<db:sql ><![CDATA[DELETE 
+FROM customers
+where id = :clientID]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	'clientID': attributes.uriParams.customerID
+}]]]></db:input-parameters>
+		</db:delete>
+		<logger level="INFO" doc:name="Logger" doc:id="298aab63-1f54-4363-96fb-f647dfeaba4a" message="#[%dw 2.0&#10;&#10;output application/json&#10;---&#10;&#10;payload]"/>
+		<choice doc:name="validate the deletion" doc:id="564af308-fffb-4639-888a-07a57e5c6841" >
+			<when expression="#[payload &gt; 0]">
+				<set-payload value='#[%dw 2.0&#10;&#10;output application/json&#10;---&#10;&#10;{&#10;	"SUCCESS": payload&#10;}]' doc:name="set payload with success message" doc:id="903db4be-5a2c-496c-8eca-bb89ebd1f9c3" />
+			</when>
+			<otherwise >
+				<set-payload value='#[%dw 2.0&#10;&#10;output application/json&#10;---&#10;&#10;{&#10;	"UNSUCCESFUL": payload&#10;}]' doc:name="set payload with unsuccessful message" doc:id="9b034c08-636f-4066-9e82-44af9c309404" />
+			</otherwise>
+		</choice>
+	</flow>
+</mule>
